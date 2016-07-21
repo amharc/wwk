@@ -1,0 +1,38 @@
+Moje rozwiązanie trzyma dla każdego procesu licznik mówiący, ile ten proces chce teraz spać.
+Gdy każdy z procesów zaśnie na swoim liczniku, proces init wykrywa timeout i atomowo
+dekrementuje liczniki wszystkich procesów.
+
+Instrukcje pilne realizuję poprzez powtarzanie odpowiednią liczbę razy instrukcji spania
+1 jednostkę czasu, być może przerywając pętlę (niedeterministycznie) wcześniej.
+
+To rozwiązanie traktuje pozostałe instrukcje jako trwające zero jednostek czasu
+(co było kiedyś sugerowane na labach). Ażeby dopuścić jednak jakieś przeploty z instrukcjami
+trwającymi jakiś czas, w istotnych miejscach programu wykonuję spanie o conajwyżej T3 jednostek
+czasu (np. w sekcji krytycznej).
+
+Algorytm jest bezpieczny o ile T1 <= T2. Wzajemne wykluczanie weryfikuję poprzez utrzymywanie zmiennej
+in_crit, inkrementowanej, gdy jakiś proces wchodzi do sekcji krytycznej i dekrementowanej, gdy wychodzi.
+
+Algorytm jest żywotny w sensie, że będzie odbywał się postęp (brak zakleszczenia) -- do zweryfikowania tej
+własności użyłem detekcji non-progress cycle.
+
+Natomiast nie jest żywotny w sensie: jeśłi proces chce wejść do sekcji krytycznej, to kiedyś do niej wejdzie:
+jeśli mamy procesy, które synchronicznie będą wykonywać swoje instrukcje, to jeden z nich
+może zagłodzić drugi, ustawiając zmienną kto na siebie zaraz po tym, gdy zrobi to ten pierwszy.
+Odpowiednia formuła ltl: liveness jest falsyfikowana przez spina.
+
+Własność trzecia nie zachodzi: jeśli jakiś proces rozpocznie protokół wstępny, to wprawdzie ustawi zmienną kto
+(zajmie mu to powiedzmy T1 jednostek czasu), a następnie będzie spał T2 sekund, lecz w tym czasie inny proces,
+który rozpoczął protokół wstępny T1 - 1 jednostek później może nadal stwierdzić, że kto == 0 jest prawdą, po czym
+zapisać tam swój identyfikator w ciągu 2 jednostek czasu. Wtedy proces pierwszy obudzi się po sleep(T2),
+stwierdzając, że jednak nie ma prawa teraz wejść do sekcji krytycznej, lecz nikt inny nie może teraz do niej wejść,
+bo proces drugi właśnie rozpoczął wykonywanie sleep(T2). Do sfalsyfikowania tej własności użyłem dodatkowego procesu
+(checker), który oczekuje aż któryś proces ustawi zmienną kto (co występuje po sprawdzeniu, czy kto == 0, lecz kontrprzykład
+tutaj jest kontrprzykładem w własności z zadania), a następnie śpi T1 + T2 + 1 jednostek czasu. Wtedy wymaga, żeby
+któryś proces znalazł się już kiedyś w sekcji krytycznej.
+
+Własność czwarta (kto pierwszy ustawi kto, ten pierwszy wejdzie do sekcji krytycznej) jest nieprawdziwa.
+Wystarczy, że dwa procesy najpierw wykonają sprawdzenie, czy kto == 0, a potem oba ustawią kto na swój
+identyfikator. Wtedy ten pierwszy z nich na pewno nie wejdzie do sekcji krytycznej w obecnym obrocie dużej
+pętli, mimo że pierwszy ustawił kto. Do sfalsyfikowania tej własności użyłem formuły ltlowej
+first_kto_crit.
